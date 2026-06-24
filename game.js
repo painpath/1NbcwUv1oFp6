@@ -39,7 +39,7 @@ async function main() {
   await app.init({
     width: CFG.W, height: CFG.H,
     background: '#1a1a1a',
-    antialias: true,
+    antialias: !('ontouchstart' in window),
     resolution: Math.min(window.devicePixelRatio, 2),
     autoDensity: true
   });
@@ -139,7 +139,7 @@ async function main() {
   const bgStars = [];
   const bgGfx = new PIXI.Graphics();
   bgLayer.addChild(bgGfx);
-  for (let i = 0; i < 150; i++) {
+  for (let i = 0; i < 80; i++) {
     bgStars.push({
       x: Math.random() * CFG.W, y: Math.random() * CFG.H,
       r: .5 + Math.random() * 1.5,
@@ -177,7 +177,7 @@ async function main() {
     for (let i = particles.length - 1; i >= 0; i--) {
       const p = particles[i];
       p.x += p.vx; p.y += p.vy; p.vy += .15; p.life -= p.decay;
-      if (p.life <= 0) particles.splice(i, 1);
+      if (p.life <= 0) { particles[i] = particles[particles.length - 1]; particles.pop(); }
     }
   }
   function drawParticles() {
@@ -257,8 +257,10 @@ async function main() {
     const dt = ticker.deltaTime;
     frame += dt;
 
-    updateBgStars(dt);
-    drawBgStars();
+    if (state === ST.PLAY || state === ST.DYING) {
+      updateBgStars(dt);
+      drawBgStars();
+    }
 
     if (state === ST.PLAY) {
       if (speed < CFG.SPEED_MAX) speed += CFG.ACCEL * dt;
