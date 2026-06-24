@@ -6,9 +6,9 @@ const CFG = {
   W: 400, H: 700,
   BALLOON_X: 200, BALLOON_Y: 520,
   BALLOON_R: 16, HOLE_R: 22, WALL_H: 22,
-  SPEED_INIT: 3.2, SPEED_MAX: 7, ACCEL: 0.0008,
+  SPEED_INIT: 5, SPEED_MAX: 9, ACCEL: 0.0015,
   MAX_LIVES: 3, BLINK_FRAMES: 40,
-  COMBO_INTERVAL: 5, DOUBLE_WALL_CHANCE: 0.15,
+  COMBO_INTERVAL: 5,
   C: {
     light: 0xf5f5f7, dark: 0x1d1d1f,
     wall: 0x3a3a3c,
@@ -28,9 +28,11 @@ function showOverlay(title, lines) {
   panelBody.innerHTML = lines.map(([text, cls]) =>
     `<div class="stat${cls ? ' ' + cls : ''}">${text}</div>`
   ).join('');
-  overlay.style.display = 'flex';
+  overlay.style.display = 'flex'; setUIVisible(false);
 }
-function hideOverlay() { overlay.style.display = 'none'; }
+function hideOverlay() { overlay.style.display = 'none'; setUIVisible(true); }
+const uiEls = [];
+function setUIVisible(v) { for (const e of uiEls) e.visible = v; }
 
 async function main() {
   const app = new PIXI.Application();
@@ -72,12 +74,14 @@ async function main() {
   const comboTxt = mkText(16, '#f5f5f7', CFG.W / 2, 88, 'center');
   const multTxt = mkText(20, '#0a84ff', CFG.W / 2, 112, 'center');
   uiLayer.addChild(scoreTxt, hiTxt, livesTxt, comboTxt, multTxt);
+  uiEls.push(scoreTxt, hiTxt, livesTxt, comboTxt, multTxt);
 
   // --- State ---
   const ST = { WAIT: 0, PLAY: 1, DYING: 2, OVER: 3 };
   let state = ST.WAIT;
   let speed = 0, score = 0, frame = 0, combo = 0, mult = 1, multTimer = 0;
   let lives = 3, blinkTimer = 0, lastWallColor = null, spawnTimer = 0;
+  let bestCombo = 0;
   let highScore = parseInt(localStorage.getItem('cbHi')) || 0;
   hiTxt.text = `\u{1F3C6} ${highScore}`;
 
@@ -85,10 +89,10 @@ async function main() {
   let walls = [], particles = [];
   const wallPool = [];
 
-  function getWall(y, color, type) {
+  function getWall(y, color) {
     let w = wallPool.pop();
-    if (!w) { w = { gfx: new PIXI.Graphics(), y: 0, color: '', type: '', h: CFG.WALL_H, holeR: CFG.HOLE_R, passed: false }; wallLayer.addChild(w.gfx); }
-    w.y = y; w.color = color; w.type = type || 'normal'; w.passed = false;
+    if (!w) { w = { gfx: new PIXI.Graphics(), y: 0, color: '', h: CFG.WALL_H, holeR: CFG.HOLE_R, passed: false }; wallLayer.addChild(w.gfx); }
+    w.y = y; w.color = color; w.passed = false;
     drawWall(w);
     return w;
   }
@@ -187,11 +191,7 @@ async function main() {
     else color = Math.random() > .5 ? C.light : C.dark;
     lastWallColor = color;
 
-    let type = 'normal';
-    if (speed > 5.5 && Math.random() < CFG.DOUBLE_WALL_CHANCE) type = 'double';
-
-    walls.push(getWall(-CFG.WALL_H, color, type));
-    if (type === 'double') walls.push(getWall(-CFG.WALL_H - 50, Math.random() > .5 ? C.light : C.dark, 'normal'));
+    walls.push(getWall(-CFG.WALL_H, color));
   }
 
   // --- Collision ---
@@ -204,13 +204,14 @@ async function main() {
         if (balloonColor !== w.color) return 'wrong';
 
         combo++;
+        if (combo > bestCombo) bestCombo = combo;
         if (combo % CFG.COMBO_INTERVAL === 0) {
           spawnParticles(CFG.BALLOON_X, CFG.BALLOON_Y, 20);
-          if (lives < CFG.MAX_LIVES) { lives++; updateLives(); }
-          bonusTimer = 60;
+          if (lives < CFG.MAX_LIVES) { lives++; updateLives(); bonusTimer = 60; }
         }
-        if (combo >= 5 && mult === 1) { mult = 2; multTimer = 180; }
-        if (combo >= 10) { mult = 3; multTimer = 180; }
+        if (combo >= 3 && mult === 1) { mult = 2; multTimer = 180; }
+        if (combo >= 7 && mult < 3) { mult = 3; multTimer = 180; }
+        if (combo >= 12 && mult < 4) { mult = 4; multTimer = 180; }
       }
     }
     return 'ok';
@@ -225,7 +226,7 @@ async function main() {
   // --- Reset ---
   function reset() {
     speed = CFG.SPEED_INIT; score = 0; frame = 0;
-    combo = 0; mult = 1; multTimer = 0;
+    combo = 0; mult = 1; multTimer = 0; bestCombo = 0;
     lives = CFG.MAX_LIVES; blinkTimer = 0;
     lastWallColor = null; spawnTimer = 0; bonusTimer = 0;
     balloonColor = C.light; balloonSway = 0;
@@ -238,7 +239,7 @@ async function main() {
 
   // --- Bonus text ---
   const bonusTxt = new PIXI.Text({
-    text: '\u{1F525} BONUS +\u2764\uFE0F',
+    text: 'BONUS +\u2764\uFE0F',
     style: { fontSize: 22, fill: '#0a84ff', fontFamily: 'Courier New', fontWeight: 'bold' }
   });
   bonusTxt.anchor.set(0.5);
@@ -267,7 +268,7 @@ async function main() {
       drawBalloon();
 
       spawnTimer += dt;
-      const gap = Math.max(35, 80 - speed * 5);
+      const gap = Math.max(20, 45 - speed * 2);
       if (spawnTimer > gap + Math.random() * 20) { spawnWall(); spawnTimer = 0; }
 
       for (const w of walls) { w.y += speed * dt; w.gfx.y = w.y; }
@@ -285,6 +286,7 @@ async function main() {
       blinkTimer -= dt;
       blinkFrame += dt;
       balloonGfx.visible = Math.floor(blinkFrame / 4) % 2 === 0;
+      if (balloonGfx.visible) drawBalloon();
 
       for (const w of walls) { w.y += speed * dt; w.gfx.y = w.y; }
       updateParticles();
@@ -297,7 +299,7 @@ async function main() {
         if (lives > 0) {
           lives--; combo = 0; mult = 1;
           updateLives();
-          balloonColor = C.light; balloonSway = 0;
+          balloonSway = 0;
           balloonGfx.visible = true;
           state = ST.PLAY;
         } else {
@@ -307,10 +309,9 @@ async function main() {
             hiTxt.text = `\u{1F3C6} ${highScore}`;
           }
           state = ST.OVER;
-          showOverlay(`${score}`, [
-            [`\u{1F3C6} ${highScore}`, 'sub'],
-            [`\u{1F525} \u043A\u043E\u043C\u0431\u043E: ${combo}`, 'sub'],
-            ['\u041D\u0430\u0436\u043C\u0438 \u0434\u043B\u044F \u043F\u0435\u0440\u0435\u0437\u0430\u043F\u0443\u0441\u043A\u0430', 'hint']
+          showOverlay(`\u{1F3C6} ${score}`, [
+            [`\u{1F525} Best combo: ${bestCombo}`, 'sub'],
+            ['Tap to restart', 'hint']
           ]);
         }
       }
@@ -347,8 +348,8 @@ async function main() {
   });
 
   // --- Start screen ---
-  showOverlay('\u{1F388} Color Balloon', [
-    ['\u041D\u0430\u0436\u043C\u0438 \u0447\u0442\u043E\u0431\u044B \u043D\u0430\u0447\u0430\u0442\u044C', 'hint']
+  showOverlay('C Balloon', [
+    ['Tap to play', 'hint']
   ]);
 
   drawBalloon();
