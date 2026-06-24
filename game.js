@@ -292,7 +292,7 @@ async function main() {
       balloonGfx.visible = Math.floor(blinkFrame / 4) % 2 === 0;
       if (balloonGfx.visible) drawBalloon();
 
-      for (const w of walls) { w.y += speed * dt; w.gfx.y = w.y; }
+      for (const w of walls) { w.y += speed * dt; w.gfx.y = w.y; w.gfx.alpha = .85 + Math.sin(frame * .08 + w.y * .02) * .15; }
       updateParticles();
       if (bonusTimer > 0) bonusTimer -= dt;
 
@@ -338,7 +338,7 @@ async function main() {
       app.stage.x = 0; app.stage.y = 0;
     }
 
-    if (balloonScale < 1) { balloonScale = Math.min(1, balloonScale + dt * .15); }
+    if (balloonScale < 1) { balloonScale = Math.min(1, balloonScale + dt * .2); }
   });
 
   // --- Input ---
@@ -364,6 +364,7 @@ async function main() {
 
   // --- Start screen ---
   showOverlay('C Balloon', [
+    ['Tap to change color', 'sub'],
     ['Tap to play', 'hint']
   ]);
 
