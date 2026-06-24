@@ -82,6 +82,8 @@ async function main() {
   let speed = 0, score = 0, frame = 0, combo = 0, mult = 1, multTimer = 0;
   let lives = 3, blinkTimer = 0, lastWallColor = null, spawnTimer = 0;
   let bestCombo = 0;
+  let shakeTimer = 0, shakeIntensity = 0;
+  let balloonScale = 1;
   let highScore = parseInt(localStorage.getItem('cbHi')) || 0;
   hiTxt.text = `\u{1F3C6} ${highScore}`;
 
@@ -129,6 +131,7 @@ async function main() {
     g.circle(0, 0, r).fill(c).stroke({ width: 1.5, color: c === C.light ? C.light : C.ringDark });
     g.ellipse(-r * .3, -r * .3, r * .25, r * .3).fill({ color: c === C.light ? C.hiLight : C.hiDark, alpha: 0.35 });
     g.x = CFG.BALLOON_X; g.y = CFG.BALLOON_Y;
+    g.scale.set(balloonScale);
     g.visible = true;
   }
 
@@ -230,7 +233,8 @@ async function main() {
     lives = CFG.MAX_LIVES; blinkTimer = 0;
     lastWallColor = null; spawnTimer = 0; bonusTimer = 0;
     balloonColor = C.light; balloonSway = 0;
-    balloonGfx.visible = true;
+    balloonGfx.visible = true; balloonScale = 1;
+    shakeTimer = 0; shakeIntensity = 0;
     for (const w of walls) releaseWall(w);
     walls = []; particles = [];
     updateLives();
@@ -271,13 +275,13 @@ async function main() {
       const gap = Math.max(20, 45 - speed * 2);
       if (spawnTimer > gap + Math.random() * 20) { spawnWall(); spawnTimer = 0; }
 
-      for (const w of walls) { w.y += speed * dt; w.gfx.y = w.y; }
+      for (const w of walls) { w.y += speed * dt; w.gfx.y = w.y; w.gfx.alpha = .85 + Math.sin(frame * .08 + w.y * .02) * .15; }
       walls = walls.filter(w => { if (w.y > CFG.H + 60) { releaseWall(w); return false; } return true; });
 
       updateParticles();
 
       const result = checkCollisions();
-      if (result === 'wrong') { state = ST.DYING; blinkTimer = CFG.BLINK_FRAMES; blinkFrame = 0; }
+      if (result === 'wrong') { state = ST.DYING; blinkTimer = CFG.BLINK_FRAMES; blinkFrame = 0; shakeTimer = 12; shakeIntensity = 6; }
 
       comboTxt.text = combo >= 3 ? `\u{1F525} ${combo}` : '';
       multTxt.text = mult > 1 && multTimer > 0 ? `x${mult}` : '';
@@ -299,7 +303,7 @@ async function main() {
         if (lives > 0) {
           lives--; combo = 0; mult = 1;
           updateLives();
-          balloonSway = 0;
+          balloonSway = 0; balloonScale = 0;
           balloonGfx.visible = true;
           state = ST.PLAY;
         } else {
@@ -324,6 +328,17 @@ async function main() {
     if (bonusTimer > 0) bonusTxt.alpha = Math.min(1, bonusTimer / 30);
 
     drawParticles();
+
+    if (shakeTimer > 0) {
+      shakeTimer -= dt;
+      const s = shakeIntensity * (shakeTimer / 12);
+      app.stage.x = (Math.random() - .5) * s * 2;
+      app.stage.y = (Math.random() - .5) * s * 2;
+    } else {
+      app.stage.x = 0; app.stage.y = 0;
+    }
+
+    if (balloonScale < 1) { balloonScale = Math.min(1, balloonScale + dt * .15); }
   });
 
   // --- Input ---
